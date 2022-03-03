@@ -31,8 +31,7 @@ class Client(object):
     @classmethod
     @asyncio.coroutine
     def connect(Client, host, port, loop=None):
-        reader, writer = yield from asyncio.open_connection(host, port,
-                                                            loop=loop)
+        reader, writer = yield from asyncio.open_connection(host, port)
         cli =  Client(reader, writer, loop=loop)
         cli.host = host
         cli.port = port
