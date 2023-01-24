@@ -62,8 +62,6 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         self.concurrency = concurrency
         self._loop = loop or asyncio.get_event_loop()
 
-
-
     async def start(self):
         self._terminating = False
         self._connectors = [asyncio.Task(self._client(host, port))
@@ -71,7 +69,6 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         self._tasks = set()
         self._current_task = None
 
-    
     async def _client(self, host, port):
         try:
             while not self._terminating:
@@ -85,7 +82,6 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         except Exception:
             log.exception("Unexpected error in worker loop")
 
-    
     async def _connect(self, host, port):
         try:
             start = time.time()
@@ -143,12 +139,10 @@ class AbstractWorker(metaclass=abc.ABCMeta):
                 yield from asyncio.wait(self._tasks, loop=self._loop)
             cli.close()
 
-    
     async def release_task(self, cli, reserved, stats):
         yield from cli.send_command('release',
             reserved.job_id, stats['pri'], 0)
 
-    
     async def _start_task(self, cli, reserved):
         stats = yield from cli.send_command('stats-job', reserved.job_id)
         if not isinstance(stats, Ok):
@@ -165,11 +159,9 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         self._tasks.add(task)
 
     @abc.abstractmethod
-    
     async def run_task(self, reserved, stats):
         pass
 
-    
     async def task_wrapper(self, cli, reserved, stats):
         try:
             yield from self.run_task(reserved, stats)
@@ -186,7 +178,6 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         else:
             yield from cli.send_command('delete', reserved.job_id)
 
-    
     async def wait_stopped(self):
         yield from asyncio.wait(self._connectors, loop=self._loop)
         while self._tasks:
@@ -218,7 +209,6 @@ class JsonTaskWorker(AbstractWorker):
             'echo': lambda *args, **kw: "echo(*%r, **%r)" % (args, kw),
             }
 
-    
     async def run_task(self, reserved, stats):
         name, kwargs, *args = json.loads(reserved.data.decode('utf-8'))
         sig = Signature(name, args, kwargs)
@@ -249,7 +239,6 @@ class JsonTaskWorker(AbstractWorker):
         # Make lower priority for retried tasks
         # And use exponential delay
         return Release(stats['pri'] + 1, self._calc_delay(stats))
-
 
 
 

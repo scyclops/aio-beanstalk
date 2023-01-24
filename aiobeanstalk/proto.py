@@ -29,7 +29,6 @@ class Client(object):
         self._task = asyncio.Task(self._reader_task(), loop=self._loop)
 
     @classmethod
-    
     async def connect(Client, host, port, loop=None):
         reader, writer = yield from asyncio.open_connection(host, port)
         cli =  Client(reader, writer, loop=loop)
@@ -60,7 +59,6 @@ class Client(object):
 
         return fut
 
-    
     async def _reader_task(self):
         try:
             while True:
