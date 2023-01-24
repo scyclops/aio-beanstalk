@@ -73,7 +73,7 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         try:
             while not self._terminating:
                 try:
-                    yield self._connect(host, port)
+                    await self._connect(host, port)
                 except (OSError, EOFError):
                     log.info("Connection to %s:%d closed. Reconnecting",
                         host, port, exc_info=1)
@@ -85,27 +85,27 @@ class AbstractWorker(metaclass=abc.ABCMeta):
     async def _connect(self, host, port):
         try:
             start = time.time()
-            cli = yield Client.connect(host, port)
+            cli = await Client.connect(host, port)
         except OSError as e:
             log.warning("Error establishing connection. Will retry...")
-            yield asyncio.sleep(max(0, start + 0.1 - time.time()),
+            await asyncio.sleep(max(0, start + 0.1 - time.time()),
                                 loop=self._loop)
             raise e
         log.info("Established connection to %s:%s", host, port)
         try:
             for q in self.queues:
-                res = yield cli.send_command('watch', q)
+                res = await cli.send_command('watch', q)
                 if isinstance(res, Exception):
                     raise res
             if 'default' not in self.queues:
-                res = yield cli.send_command('ignore', 'default')
+                res = await cli.send_command('ignore', 'default')
                 if isinstance(res, Exception):
                     raise res
 
             while not self._terminating:
                 while len(self._tasks) >= self.concurrency:
                     try:
-                        yield asyncio.wait(self._tasks,
+                        await asyncio.wait(self._tasks,
                             return_when=asyncio.FIRST_COMPLETED,
                             loop=self._loop)
                     except asyncio.CancelledError:
@@ -116,42 +116,42 @@ class AbstractWorker(metaclass=abc.ABCMeta):
                         #  When there is a task we shouldn't wait forever
                         #  because our waiting blocks release/bury/delete
                         #  commands to proceed for task
-                        task = yield cli.send_command(
+                        task = await cli.send_command(
                             'reserve-with-timeout', 1)
                     else:
-                        task = yield cli.send_command('reserve')
+                        task = await cli.send_command('reserve')
                     if not isinstance(task, Reserved):
                         if isinstance(task, DeadlineSoon):
                             log.warning("Deadline is soon. Stopping accepting"
                                 " tasks for safety period 1 sec")
-                            yield asyncio.sleep(1, loop=self._loop)
+                            await asyncio.sleep(1, loop=self._loop)
                             continue
                         if isinstance(task, TimedOut):
                             continue
                         log.error("Unexpected response %r", task)
                         continue
                     log.debug("Received task %d: %r", task.job_id, task.data)
-                    yield self._start_task(cli, task)
+                    await self._start_task(cli, task)
                 except EOFError:
                     break
         finally:
             if self._tasks:
-                yield asyncio.wait(self._tasks, loop=self._loop)
+                await asyncio.wait(self._tasks, loop=self._loop)
             cli.close()
 
     async def release_task(self, cli, reserved, stats):
-        yield cli.send_command('release',
+        await cli.send_command('release',
             reserved.job_id, stats['pri'], 0)
 
     async def _start_task(self, cli, reserved):
-        stats = yield cli.send_command('stats-job', reserved.job_id)
+        stats = await cli.send_command('stats-job', reserved.job_id)
         if not isinstance(stats, Ok):
             #  Presumably task is deleted by administrator
             return
         stats = yaml.load(stats.data, Loader=YamlLoader)
         if len(self._tasks) >= self.concurrency:
             #  Worker already have a task, probably from another client
-            yield self.release_task(cli, reserved, stats)
+            await self.release_task(cli, reserved, stats)
             return
         task = asyncio.shield(self.task_wrapper(cli, reserved, stats),
                               loop=self._loop)
@@ -164,24 +164,24 @@ class AbstractWorker(metaclass=abc.ABCMeta):
 
     async def task_wrapper(self, cli, reserved, stats):
         try:
-            yield self.run_task(reserved, stats)
+            await self.run_task(reserved, stats)
         except Bury:
             log.debug("Burying task %d", reserved.job_id)
-            yield cli.send_command('bury', reserved.job_id, stats['pri'])
+            await cli.send_command('bury', reserved.job_id, stats['pri'])
         except Release as rel:
-            yield cli.send_command('release',
+            await cli.send_command('release',
                 reserved.job_id, rel.priority, rel.delay)
         except Exception:
             log.exception("Exception running task %d. Burying...",
                 reserved.job_id)
-            yield cli.send_command('bury', reserved.job_id, stats['pri'])
+            await cli.send_command('bury', reserved.job_id, stats['pri'])
         else:
-            yield cli.send_command('delete', reserved.job_id)
+            await cli.send_command('delete', reserved.job_id)
 
     async def wait_stopped(self):
-        yield asyncio.wait(self._connectors, loop=self._loop)
+        await asyncio.wait(self._connectors, loop=self._loop)
         while self._tasks:
-            yield asyncio.wait(self._tasks, loop=self._loop)
+            await asyncio.wait(self._tasks, loop=self._loop)
         log.debug("No connectors and tasks left")
 
     def terminate(self):
@@ -217,7 +217,7 @@ class JsonTaskWorker(AbstractWorker):
             raise Bury()
         try:
             log.info("Calling (id: %d) %s", reserved.job_id, sig)
-            yield self.tasks[name](*args, **kwargs)
+            await self.tasks[name](*args, **kwargs)
         except Exception:
             if stats['reserves'] > self.retry_times:
                 log.exception(
@@ -258,9 +258,9 @@ async def run(options, add_tasks, Worker=JsonTaskWorker):
         worker.terminate)
     asyncio.get_event_loop().add_signal_handler(signal.SIGINT,
         worker.terminate)
-    yield worker.start()
+    await worker.start()
     log.info("Worker successfully started")
-    yield worker.wait_stopped()
+    await worker.wait_stopped()
 
 
 def worker_options(ap):
