@@ -37,8 +37,8 @@ class Caller(object):
         self._events[host, port] = ev
         return asyncio.Task(self._reconnect(host, port, ev), loop=self._loop)
 
-    @asyncio.coroutine
-    def _reconnect(self, host, port, event):
+
+    async def _reconnect(self, host, port, event):
         try:
             while True:
                 cli = yield from self._connect(host, port)
@@ -58,8 +58,8 @@ class Caller(object):
         except Exception:
             log.exception("Abnormal termination for client thread")
 
-    @asyncio.coroutine
-    def _connect(self, host, port):
+    
+    async def _connect(self, host, port):
         log.debug("Connecting to %r:%d", host, port)
         while True:
             try:
@@ -72,8 +72,8 @@ class Caller(object):
             else:
                 return cli
 
-    @asyncio.coroutine
-    def call(self, name, args, kwargs, *,
+    
+    async def call(self, name, args, kwargs, *,
         priority=2**31, ttr=120, delay=0, tube='default'):
         lst = [name, kwargs]
         lst.extend(args)
@@ -106,13 +106,13 @@ class Caller(object):
         for i in self._tasks:
             i.cancel()
 
-    @asyncio.coroutine
-    def wait_closed(self):
+    
+    async def wait_closed(self):
         yield from asyncio.wait(self._tasks, loop=self._loop)
 
 
-@asyncio.coroutine
-def run(options, loop=None):
+
+async def run(options, loop=None):
     import yaml
     conn = [('localhost', 11300)]
     if options.connect:

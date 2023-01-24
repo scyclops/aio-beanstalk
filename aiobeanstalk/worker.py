@@ -63,16 +63,16 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         self._loop = loop or asyncio.get_event_loop()
 
 
-    @asyncio.coroutine
-    def start(self):
+
+    async def start(self):
         self._terminating = False
         self._connectors = [asyncio.Task(self._client(host, port))
                             for (host, port) in self.servers]
         self._tasks = set()
         self._current_task = None
 
-    @asyncio.coroutine
-    def _client(self, host, port):
+    
+    async def _client(self, host, port):
         try:
             while not self._terminating:
                 try:
@@ -85,8 +85,8 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         except Exception:
             log.exception("Unexpected error in worker loop")
 
-    @asyncio.coroutine
-    def _connect(self, host, port):
+    
+    async def _connect(self, host, port):
         try:
             start = time.time()
             cli = yield from Client.connect(host, port)
@@ -143,13 +143,13 @@ class AbstractWorker(metaclass=abc.ABCMeta):
                 yield from asyncio.wait(self._tasks, loop=self._loop)
             cli.close()
 
-    @asyncio.coroutine
-    def release_task(self, cli, reserved, stats):
+    
+    async def release_task(self, cli, reserved, stats):
         yield from cli.send_command('release',
             reserved.job_id, stats['pri'], 0)
 
-    @asyncio.coroutine
-    def _start_task(self, cli, reserved):
+    
+    async def _start_task(self, cli, reserved):
         stats = yield from cli.send_command('stats-job', reserved.job_id)
         if not isinstance(stats, Ok):
             #  Presumably task is deleted by administrator
@@ -165,12 +165,12 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         self._tasks.add(task)
 
     @abc.abstractmethod
-    @asyncio.coroutine
-    def run_task(self, reserved, stats):
+    
+    async def run_task(self, reserved, stats):
         pass
 
-    @asyncio.coroutine
-    def task_wrapper(self, cli, reserved, stats):
+    
+    async def task_wrapper(self, cli, reserved, stats):
         try:
             yield from self.run_task(reserved, stats)
         except Bury:
@@ -186,8 +186,8 @@ class AbstractWorker(metaclass=abc.ABCMeta):
         else:
             yield from cli.send_command('delete', reserved.job_id)
 
-    @asyncio.coroutine
-    def wait_stopped(self):
+    
+    async def wait_stopped(self):
         yield from asyncio.wait(self._connectors, loop=self._loop)
         while self._tasks:
             yield from asyncio.wait(self._tasks, loop=self._loop)
@@ -218,8 +218,8 @@ class JsonTaskWorker(AbstractWorker):
             'echo': lambda *args, **kw: "echo(*%r, **%r)" % (args, kw),
             }
 
-    @asyncio.coroutine
-    def run_task(self, reserved, stats):
+    
+    async def run_task(self, reserved, stats):
         name, kwargs, *args = json.loads(reserved.data.decode('utf-8'))
         sig = Signature(name, args, kwargs)
         if name not in self.tasks:
@@ -252,8 +252,8 @@ class JsonTaskWorker(AbstractWorker):
 
 
 
-@asyncio.coroutine
-def run(options, add_tasks, Worker=JsonTaskWorker):
+
+async def run(options, add_tasks, Worker=JsonTaskWorker):
     conn = [('localhost', 11300)]
     if options.connect:
         conn = [(h, int(p))

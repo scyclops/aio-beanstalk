@@ -22,8 +22,7 @@ def do_stats_tube(caller, options):
         print(res.data.decode('ascii'))
 
 
-@asyncio.coroutine
-def run(options):
+async def run(options):
     conn = [('localhost', 11300)]
     if options.connect:
         conn = [(h, int(p))
