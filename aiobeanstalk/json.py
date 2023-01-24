@@ -40,11 +40,11 @@ class Caller(object):
     async def _reconnect(self, host, port, event):
         try:
             while True:
-                cli = yield from self._connect(host, port)
+                cli = yield self._connect(host, port)
                 self._clients[host, port] = cli
                 event.set()
                 try:
-                    yield from cli.wait_closed()
+                    yield cli.wait_closed()
                 except EOFError:
                     self._events[host, port].clear()
                     continue
@@ -62,11 +62,11 @@ class Caller(object):
         while True:
             try:
                 start = time.time()
-                cli = yield from Client.connect(host, port)
+                cli = yield Client.connect(host, port)
             except OSError:
                 log.warning("Error establishing connection. Will retry...")
-                yield from asyncio.sleep(max(0, start + 0.1 - time.time()),
-                                         loop=self._loop)
+                yield asyncio.sleep(max(0, start + 0.1 - time.time()),
+                                    loop=self._loop)
             else:
                 return cli
 
@@ -77,7 +77,7 @@ class Caller(object):
         body = json.dumps(lst, ensure_ascii=False).encode('utf-8')
         while True:
             while not self._clients:
-                yield from asyncio.wait(
+                yield asyncio.wait(
                     [ev.wait() for ev in self._events.values()],
                     return_when=asyncio.FIRST_COMPLETED, loop=self._loop)
             cli = random.choice(list(self._clients.values()))
@@ -85,8 +85,8 @@ class Caller(object):
                 # Must pipeline these two
                 use = cli.send_command('use', tube)
                 put = cli.send_command('put', priority, delay, ttr, body=body)
-                yield from use
-                val = yield from put
+                yield use
+                val = yield put
             except EOFError:
                 raise CallingError()
             if isinstance(val, Draining):
@@ -104,7 +104,7 @@ class Caller(object):
             i.cancel()
 
     async def wait_closed(self):
-        yield from asyncio.wait(self._tasks, loop=self._loop)
+        yield asyncio.wait(self._tasks, loop=self._loop)
 
 
 async def run(options, loop=None):
@@ -118,14 +118,14 @@ async def run(options, loop=None):
     kwargs = {k: yaml.safe_load(v) for k, v in options.kwargs}
 
     caller = Caller(conn, loop=loop)
-    reserve = yield from caller.call(options.task_name, args, kwargs,
+    reserve = yield caller.call(options.task_name, args, kwargs,
         priority=options.priority,
         ttr=options.ttr,
         delay=options.delay,
         tube=options.queue,
         )
     caller.close()
-    yield from caller.wait_closed()
+    yield caller.wait_closed()
     print(reserve)
 
 

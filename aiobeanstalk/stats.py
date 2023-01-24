@@ -29,8 +29,8 @@ async def run(options):
                 for h, p in (a.split(':', 1)
                              for a in options.connect)]
     assert len(conn) == 1, 'Only single connection supported so far'
-    cli = yield from Client.connect(*conn[0])
-    yield from options.action(cli, options)
+    cli = yield Client.connect(*conn[0])
+    yield options.action(cli, options)
 
 
 def main():

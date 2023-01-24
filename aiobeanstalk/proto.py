@@ -30,7 +30,7 @@ class Client(object):
 
     @classmethod
     async def connect(Client, host, port, loop=None):
-        reader, writer = yield from asyncio.open_connection(host, port)
+        reader, writer = yield asyncio.open_connection(host, port)
         cli =  Client(reader, writer, loop=loop)
         cli.host = host
         cli.port = port
@@ -62,7 +62,7 @@ class Client(object):
     async def _reader_task(self):
         try:
             while True:
-                header = yield from self._reader.readline()
+                header = yield self._reader.readline()
                 if not header:  # connection closed
                     raise EOFError()
                 cmd, *args = header.split()
@@ -73,8 +73,8 @@ class Client(object):
                         .format(cmd, args))
                 if Packet.fields and Packet.fields[-1][1] == bytes:
                     blen = int(args[-1])
-                    args[-1] = yield from self._reader.readexactly(blen)
-                    endline = yield from self._reader.readexactly(2)
+                    args[-1] = yield self._reader.readexactly(blen)
+                    endline = yield self._reader.readexactly(2)
                     if endline != b'\r\n':
                         raise ProtocolError()
                 packet = Packet(*(_convert(x, typ)
